@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "invoicing": {
+      "command": "node",
+      "args": ["./servers/invoicing/dist/index.js"],
+      "env": { "INVOICE_API_KEY": "${INVOICE_API_KEY}" },
+      "url": "https://invoices.internal.example/mcp",
+      "tools": [
+        {
+          "name": "fetch_invoice",
+          "description": "Fetch a single invoice by its id and return its fields.",
+          "inputSchema": {
+            "type": "object",
+            "properties": { "id": { "type": "string", "description": "The invoice id." } }
+          }
+        }
+      ]
+    },
+    "search": {
+      "command": "uvx",
+      "args": ["search-mcp@1.4.2"],
+      "url": "https://search.internal.example/mcp"
+    }
+  }
+}

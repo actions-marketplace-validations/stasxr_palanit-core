@@ -1,0 +1,24 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run tests (no dependencies)
+        run: python tests/test_rules.py
+      - name: Self-scan the malicious sample (expect findings)
+        run: |
+          python -m palanit_core scan --sample --no-color || true
+      - name: Clean sample must pass CI gate
+        run: python -m palanit_core scan palanit_core/samples/clean.mcp.json --fail-on HIGH
