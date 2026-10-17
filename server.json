@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.stasxr/palanit-core",
+  "description": "Scan MCP servers and AI-agent tool manifests for poisoned descriptions, data exfiltration, secrets and supply-chain risk.",
+  "version": "0.1.1",
+  "repository": {
+    "url": "https://github.com/stasxr/palanit-core",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "palanit-core",
+      "version": "0.1.1",
+      "runtimeHint": "python",
+      "transport": { "type": "stdio" },
+      "environmentVariables": []
+    }
+  ]
+}

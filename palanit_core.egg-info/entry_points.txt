@@ -1,0 +1,3 @@
+[console_scripts]
+palanit = palanit_core.cli:main
+palanit-mcp = palanit_core.mcp_server:main

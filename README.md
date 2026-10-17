@@ -8,6 +8,11 @@
 
 [Website](https://palanit.com) · [Docs](https://palanit.com/docs) · [Palanit OS (hosted)](https://palanit.com/products/os)
 
+[![PyPI](https://img.shields.io/pypi/v/palanit-core?color=5b8def)](https://pypi.org/project/palanit-core/)
+[![Python](https://img.shields.io/pypi/pyversions/palanit-core)](https://pypi.org/project/palanit-core/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![CI](https://github.com/stasxr/palanit-core/actions/workflows/ci.yml/badge.svg)](https://github.com/stasxr/palanit-core/actions/workflows/ci.yml)
+
 </div>
 
 ---
@@ -75,7 +80,7 @@ Run `palanit rules` to list them. Inputs understood: Claude-style `mcpServers`
 configs, `servers` configs, `tools` manifests, a bare list of tools, or a single
 tool object. Unknown JSON still gets string-level checks.
 
-## Use it in CI
+## Use it as a GitHub Action
 
 ```yaml
 # .github/workflows/palanit.yml
@@ -86,10 +91,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: stasxr/palanit-core@v0.1.1
+        with:
+          files: "mcp.config.json"   # files or globs, space-separated
+          fail-on: "HIGH"            # INFO | LOW | MEDIUM | HIGH | CRITICAL
+```
+
+Prefer plain steps? That works too:
+
+```yaml
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install palanit-core
       - run: palanit scan mcp.config.json --fail-on HIGH
+```
+
+## Use it as a pre-commit hook
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/stasxr/palanit-core
+    rev: v0.1.1
+    hooks:
+      - id: palanit            # scans mcp*.json / claude_desktop_config.json by default
+```
+
+## Use it as an MCP server
+
+Palanit Core can itself run as an MCP server, so an agent or MCP client
+(Claude Desktop, Cursor, Cline, …) can scan a config on demand:
+
+```bash
+pip install "palanit-core[mcp]"
+palanit-mcp          # stdio transport
+```
+
+Exposes the tools `scan_mcp_config`, `list_rules` and `version`. Example client entry:
+
+```json
+{
+  "mcpServers": {
+    "palanit": { "command": "palanit-mcp" }
+  }
+}
+```
+
+## Add the badge
+
+Scanned your MCP server with Palanit Core? Show it:
+
+[![Scanned with Palanit Core](https://img.shields.io/badge/scanned%20with-Palanit%20Core-5b8def)](https://github.com/stasxr/palanit-core)
+
+```markdown
+[![Scanned with Palanit Core](https://img.shields.io/badge/scanned%20with-Palanit%20Core-5b8def)](https://github.com/stasxr/palanit-core)
 ```
 
 ## Responsible use

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "palanit-core"
-version = "0.1.0"
+version = "0.1.1"
 description = "A watchtower for AI agents — scan MCP servers and agent tool manifests for hidden risk."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.2.0"]
+
 [project.urls]
 Homepage = "https://palanit.com"
 Documentation = "https://palanit.com/docs"
@@ -29,6 +32,7 @@ Issues = "https://github.com/stasxr/palanit-core/issues"
 
 [project.scripts]
 palanit = "palanit_core.cli:main"
+palanit-mcp = "palanit_core.mcp_server:main"
 
 [tool.setuptools]
 packages = ["palanit_core"]

@@ -1,0 +1,8 @@
+- id: palanit
+  name: Palanit Core (MCP / agent security scan)
+  description: Scan MCP server configs and AI-agent tool manifests for poisoned descriptions, exfiltration, secrets and supply-chain risk.
+  entry: palanit scan --fail-on HIGH
+  language: python
+  # By default, run on MCP-looking JSON files. Override `files:` in your config to widen/narrow.
+  files: '(^|/)(mcp[^/]*|claude_desktop_config|.*\.mcp)\.json$'
+  pass_filenames: true
