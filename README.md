@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: stasxr/palanit-core@v0.1.1
+      - uses: stasxr/palanit-core@v0.1.2
         with:
           files: "mcp.config.json"   # files or globs, space-separated
           fail-on: "HIGH"            # INFO | LOW | MEDIUM | HIGH | CRITICAL
@@ -112,7 +112,7 @@ Prefer plain steps? That works too:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/stasxr/palanit-core
-    rev: v0.1.1
+    rev: v0.1.2
     hooks:
       - id: palanit            # scans mcp*.json / claude_desktop_config.json by default
 ```
@@ -161,3 +161,5 @@ authorized to test.** A clean scan reduces risk; it does not prove safety.
 ## License
 
 Apache-2.0 © Stanislav Miziyev. Contributions welcome — see [CONTRIBUTING](CONTRIBUTING.md).
+
+<sub>mcp-name: io.github.stasxr/palanit-core</sub>
