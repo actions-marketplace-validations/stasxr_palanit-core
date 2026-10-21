@@ -45,6 +45,11 @@ palanit scan --sample
 
 # Machine-readable output, fail CI on HIGH or above
 palanit scan mcp.config.json --json --fail-on HIGH
+
+# Pin the tool definitions you approved, then fail closed if a server later
+# swaps a description or schema after install (a "rug pull")
+palanit pin mcp.config.json
+palanit scan mcp.config.json --baseline .palanit.lock.json
 ```
 
 Example (trimmed):
@@ -62,6 +67,19 @@ Example (trimmed):
 9 finding(s)  (1 critical · 5 high · 3 medium)
 ```
 
+## Catch rug-pulls (tool-definition pinning)
+
+A scan at install time only sees the tool text you approved. A hostile server
+can swap a tool's description or input schema **after** that approval — and
+standard clients never re-check. `palanit pin` records a hash of each tool's
+declared definition; a later `scan --baseline` fails **closed** on any change,
+so a swap costs the attacker the tool instead of silently succeeding.
+
+```bash
+palanit pin mcp.config.json                                  # approve current definitions
+palanit scan mcp.config.json --baseline .palanit.lock.json   # HIGH + exit 1 on any drift
+```
+
 ## What it detects
 
 | Rule | Severity | What it catches |
@@ -75,6 +93,7 @@ Example (trimmed):
 | `PL-TLS-001` | LOW–MED | Endpoints over `http://` / `ws://` without TLS |
 | `PL-COLLIDE-001` | MEDIUM | Duplicate tool names that let one shadow another |
 | `PL-ENV-001` | HIGH | Literal secrets in a server's `env` block |
+| `PL-DRIFT-001` | HIGH | A tool's definition changed since you approved it — a post-install "rug pull" (only with `--baseline`) |
 
 Run `palanit rules` to list them. Inputs understood: Claude-style `mcpServers`
 configs, `servers` configs, `tools` manifests, a bare list of tools, or a single
