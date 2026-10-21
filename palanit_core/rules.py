@@ -12,12 +12,14 @@ from typing import Callable
 
 from .loaders import Normalized, walk_strings
 from .models import Finding, Severity
+from .pin import tool_key, tool_hash
 
 
 @dataclass
 class Context:
     norm: Normalized
     filename: str
+    baseline: dict | None = None  # approved {tool_key: hash}, enables drift detection
 
     def loc(self, path: str) -> str:
         path = path or "/"
@@ -195,6 +197,7 @@ def r_exfil(ctx: Context) -> list[Finding]:
 # --------------------------------------------------------------------------
 # Hardcoded secrets
 # --------------------------------------------------------------------------
+# Specific, high-confidence provider key formats — always a real finding.
 SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("AWS access key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
@@ -204,14 +207,40 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("OpenAI key", re.compile(r"\bsk-[A-Za-z0-9]{20,}\b")),
     ("Private key block", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----")),
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b")),
-    ("Generic high-entropy secret", re.compile(r"(?i)(?:api[_-]?key|secret|token|password)\s*[=:]\s*['\"]?[A-Za-z0-9/+_\-]{20,}")),
 ]
+
+# A generic `api_key = <value>` assignment. This one is noisy on documentation
+# (e.g. `API_KEY=your_key_here`), so it only fires when the value looks like a
+# real secret: no placeholder words, and enough character variety / entropy.
+GENERIC_SECRET = re.compile(
+    r"(?i)(?:api[_-]?key|secret|token|password)\s*[=:]\s*['\"]?([A-Za-z0-9/+_\-]{20,})"
+)
+PLACEHOLDER_MARKERS = (
+    "your", "here", "example", "placeholder", "changeme", "change_me", "redacted",
+    "dummy", "sample", "xxxx", "...", "replace", "insert", "enter", "my_key", "my-key",
+    "todo", "none", "null", "<", ">", "abc123", "test_", "fake",
+)
+
+
+def _looks_placeholder(v: str) -> bool:
+    low = v.lower()
+    return any(m in low for m in PLACEHOLDER_MARKERS)
+
+
+def _has_entropy(v: str) -> bool:
+    classes = sum([
+        any(c.islower() for c in v),
+        any(c.isupper() for c in v),
+        any(c.isdigit() for c in v),
+    ])
+    return classes >= 2 and len(set(v)) >= 10
 
 
 @rule("PL-SECRET-001", "Hardcoded secret")
 def r_secrets(ctx: Context) -> list[Finding]:
     out: list[Finding] = []
     for path, value in walk_strings(ctx.norm.raw):
+        matched = False
         for name, pat in SECRET_PATTERNS:
             m = pat.search(value)
             if m:
@@ -226,7 +255,26 @@ def r_secrets(ctx: Context) -> list[Finding]:
                         evidence=_redact(m.group(0)),
                     )
                 )
+                matched = True
                 break
+        if matched:
+            continue
+        gm = GENERIC_SECRET.search(value)
+        if gm:
+            secret = gm.group(1)
+            if _looks_placeholder(secret) or not _has_entropy(secret):
+                continue  # documentation placeholder / low-entropy — not a real credential
+            out.append(
+                Finding(
+                    rule_id="PL-SECRET-001",
+                    severity=Severity.HIGH,
+                    title="Hardcoded secret (high-entropy value)",
+                    message="A high-entropy secret appears to be committed in this file. Anyone who reads the config gets the credential.",
+                    remediation="Remove the secret, rotate it, and inject it at runtime via an environment variable or secret manager.",
+                    location=ctx.loc(path),
+                    evidence=_redact(secret),
+                )
+            )
     return out
 
 
@@ -390,6 +438,67 @@ def r_env(ctx: Context) -> list[Finding]:
                         evidence=f"{k}={_redact(v)}",
                     )
                 )
+    return out
+
+
+# --------------------------------------------------------------------------
+# Tool-definition drift (post-approval "rug pull") — only runs with a baseline
+# --------------------------------------------------------------------------
+@rule("PL-DRIFT-001", "Tool definition changed since approval")
+def r_drift(ctx: Context) -> list[Finding]:
+    if ctx.baseline is None:
+        return []
+    out: list[Finding] = []
+    seen: set[str] = set()
+    for t in ctx.norm.tools:
+        key = tool_key(t)
+        seen.add(key)
+        current = tool_hash(t)
+        approved = ctx.baseline.get(key)
+        if approved is None:
+            out.append(
+                Finding(
+                    rule_id="PL-DRIFT-001",
+                    severity=Severity.HIGH,
+                    title="Unapproved tool (not in baseline)",
+                    message=(
+                        f"Tool '{t.name or key}' is not in the approved baseline. "
+                        "Fail closed: a person must review and re-pin it before the agent trusts it."
+                    ),
+                    remediation="Review the tool, then re-run `palanit pin` to approve a new baseline.",
+                    location=ctx.loc(t.path),
+                    evidence=t.name or key,
+                )
+            )
+        elif approved != current:
+            out.append(
+                Finding(
+                    rule_id="PL-DRIFT-001",
+                    severity=Severity.HIGH,
+                    title="Tool definition changed since approval",
+                    message=(
+                        f"Tool '{t.name or key}' no longer matches the definition you approved "
+                        "(its name, description or input schema changed). This is how a server rug-pulls "
+                        "after install. Fail closed until it is re-approved."
+                    ),
+                    remediation="Diff the change; if it is legitimate re-pin with `palanit pin`, otherwise remove the server.",
+                    location=ctx.loc(t.path),
+                    evidence=f"{approved[:8]}… → {current[:8]}…",
+                )
+            )
+    for key in ctx.baseline:
+        if key not in seen:
+            out.append(
+                Finding(
+                    rule_id="PL-DRIFT-001",
+                    severity=Severity.LOW,
+                    title="Approved tool is missing",
+                    message=f"Tool '{key}' was in the approved baseline but is no longer present.",
+                    remediation="If the removal is expected, re-pin the baseline.",
+                    location=ctx.loc("/"),
+                    evidence=key,
+                )
+            )
     return out
 
 
